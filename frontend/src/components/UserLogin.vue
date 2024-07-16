@@ -29,6 +29,17 @@
         <button type="submit" class="login-button">로그인</button>
       </form>
       <button @click="goToRegister" class="register-button">회원가입</button>
+      <a
+        href="https://github.com/Jeonghoonchoi74"
+        target="_blank"
+        class="github-link"
+      >
+        <img
+          src="https://img.shields.io/badge/github-181717?style=flat&logo=github&logoColor=white"
+          alt="GitHub"
+          class="github-icon"
+        />
+      </a>
     </div>
   </div>
 </template>
@@ -102,6 +113,7 @@ export default {
 }
 
 .login-box {
+  position: relative;
   background: #fff;
   padding: 40px;
   border-radius: 10px;
@@ -110,6 +122,12 @@ export default {
   width: 100%;
   max-width: 400px;
   box-sizing: border-box;
+}
+
+.github-link {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
 }
 
 h1 {
