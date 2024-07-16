@@ -1,13 +1,15 @@
 <template>
   <div class="reservation-container">
-    <div class="header">
-      <button @click="goToMyPage" class="my-page">마이 페이지</button>
-      <button @click="logout" class="logout-button">로그아웃</button>
-    </div>
+    <div class="header"></div>
     <div class="reservation-form">
       <div class="form-group">
         <label for="date">날짜</label>
-        <select id="date" v-model="selectedDate" @change="updateAvailableSeats">
+        <select
+          id="date"
+          v-model="selectedDate"
+          @change="updateAvailableSeats"
+          class="select-box"
+        >
           <option v-for="date in availableDates" :key="date" :value="date">
             {{ date }}
           </option>
@@ -15,15 +17,20 @@
       </div>
       <div class="form-group">
         <label for="time">시간</label>
-        <select id="time" v-model="selectedTime" @change="updateAvailableSeats">
+        <select
+          id="time"
+          v-model="selectedTime"
+          @change="updateAvailableSeats"
+          class="select-box"
+        >
           <option v-for="time in filteredTimes" :key="time" :value="time">
-            {{ time }}
+            {{ formatTime(time) }}
           </option>
         </select>
       </div>
       <div class="form-group">
         <p></p>
-        <label>남은 자리 수 {{ availableSeats }}/24</label>
+        <label class="seat-info">남은 자리 수 {{ availableSeats }}/24</label>
       </div>
     </div>
     <div class="seat-map">
@@ -31,16 +38,16 @@
         v-for="(seat, index) in seats.slice(0, 20)"
         :key="index"
         class="seat"
-        :class="seatClass(index)"
+        :class="seatClass(seat)"
       >
         <input
           type="radio"
           :id="'seat-' + index"
           :value="index"
           v-model="selectedSeat"
-          :disabled="seat === 'reserved'"
+          :disabled="seat.status === 'reserved'"
         />
-        <label :for="'seat-' + index"></label>
+        <label :for="'seat-' + index">{{ seat.name }}</label>
       </div>
     </div>
     <div class="last-row">
@@ -48,21 +55,27 @@
         v-for="index in [20, 21, 22, 23]"
         :key="index"
         class="seat"
-        :class="seatClass(index)"
+        :class="seatClass(seats[index])"
       >
         <input
           type="radio"
           :id="'seat-' + index"
           :value="index"
           v-model="selectedSeat"
-          :disabled="seats[index] === 'reserved'"
+          :disabled="seats[index].status === 'reserved'"
         />
-        <label :for="'seat-' + index"></label>
+        <label :for="'seat-' + index">{{ seats[index].name }}</label>
       </div>
     </div>
-    <div class="reservation-form">
-      <button @click="reserveSeat">예약하기</button>
+    <div class="reservation-button-container">
+      <button @click="reserveSeat" class="reserve-button">예약하기</button>
     </div>
+    <ReservePopup
+      :visible="isPopupVisible"
+      :seatNumber="selectedSeatNumber"
+      @close="isPopupVisible = false"
+    />
+    <button @click="logout" class="logout-button">로그아웃</button>
   </div>
 </template>
 
@@ -70,18 +83,24 @@
 import { ref, onMounted, computed } from "vue";
 import axios from "axios";
 import { useRouter } from "vue-router";
+import ReservePopup from "./Popup.vue";
 
 export default {
   name: "SeatReservation",
+  components: {
+    ReservePopup,
+  },
   setup() {
     const selectedDate = ref("");
     const selectedTime = ref("");
     const selectedSeat = ref(null);
     const availableSeats = ref(24);
-    const seats = ref(new Array(24).fill("available"));
+    const seats = ref(new Array(24).fill({ status: "available", name: "" }));
     const availableDates = ref([]);
+    const isPopupVisible = ref(false);
+    const selectedSeatNumber = ref(null);
     const router = useRouter();
-    const times = ["10:00", "15:00", "17:00"];
+    const times = ["09:20", "10:15", "19:00", "20:00"];
 
     onMounted(() => {
       generateAvailableDates();
@@ -93,7 +112,7 @@ export default {
       const today = new Date();
       let isTodayAfterFive = false;
 
-      if (today.getHours() >= 17) {
+      if (today.getHours() >= 21) {
         isTodayAfterFive = true;
       }
 
@@ -113,7 +132,7 @@ export default {
       } else {
         selectedDate.value = availableDates.value[0];
       }
-      selectedTime.value = filteredTimes.value[0]; // 디폴트 시간 설정
+      selectedTime.value = filteredTimes.value[0];
     };
 
     const getDayOfWeek = (date) => {
@@ -128,8 +147,11 @@ export default {
       return `${yyyy}-${mm}-${dd} (${dayOfWeek})`;
     };
 
-    const goToMyPage = () => {
-      router.push("/mypage");
+    const formatTime = (time) => {
+      const [hours, minutes] = time.split(":").map(Number);
+      const period = hours < 12 ? "오전" : "오후";
+      const formattedHours = hours % 12 || 12;
+      return `${period} ${formattedHours}:${String(minutes).padStart(2, "0")}`;
     };
 
     const logout = async () => {
@@ -149,9 +171,12 @@ export default {
           `/api/seats?date=${selectedDate.value}&time=${selectedTime.value}`,
           { withCredentials: true }
         );
-        seats.value = response.data.seats;
+        seats.value = response.data.seats.map((seat) => ({
+          status: seat.status,
+          name: seat.name,
+        }));
         availableSeats.value = seats.value.filter(
-          (seat) => seat === "available"
+          (seat) => seat.status === "available"
         ).length;
       } catch (error) {
         console.error("Seats status error:", error);
@@ -165,18 +190,11 @@ export default {
         return;
       }
       try {
-        const reservationsResponse = await axios.get("/api/myReservations", {
-          withCredentials: true,
-        });
         if (!confirm("이 자리로 예약 하시겠습니까?")) {
           return;
         }
-        if (reservationsResponse.data.reservations.length >= 5) {
-          alert("최대 5번까지 예약할 수 있습니다.");
-          return;
-        }
 
-        const response = await axios.post(
+        await axios.post(
           "/api/reserve",
           {
             date: selectedDate.value,
@@ -185,18 +203,22 @@ export default {
           },
           { withCredentials: true }
         );
-        alert(response.data.message);
+        selectedSeatNumber.value = selectedSeat.value + 1;
         updateAvailableSeats();
+        isPopupVisible.value = true;
+        setTimeout(() => {
+          router.push("/");
+        }, 5000);
       } catch (error) {
         console.error("Reserve error:", error);
-        alert("예약에 실패했습니다.");
+        alert("동일한 시간에 이미 예약이 있습니다.");
       }
     };
 
-    const seatClass = (index) => {
-      if (seats.value[index] === "reserved") {
+    const seatClass = (seat) => {
+      if (seat.status === "reserved") {
         return "reserved-seat";
-      } else if (selectedSeat.value === index) {
+      } else if (selectedSeat.value === seat.index) {
         return "selected-seat";
       } else {
         return "";
@@ -222,8 +244,10 @@ export default {
       availableSeats,
       seats,
       availableDates,
+      isPopupVisible,
+      selectedSeatNumber,
       filteredTimes,
-      goToMyPage,
+      formatTime,
       logout,
       updateAvailableSeats,
       reserveSeat,
@@ -244,94 +268,84 @@ export default {
   justify-content: center;
   padding: 20px;
   font-family: "Roboto", sans-serif;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   width: 100%;
-  max-width: 800px;
-  margin-bottom: 20px;
+  padding: 20px;
 }
 
-.header button {
+.logout-button {
   padding: 10px 20px;
   font-size: 16px;
-  background-color: #ccc;
+  background-color: #ff1a1a;
+  color: #ffffff;
   border: none;
   border-radius: 5px;
   cursor: pointer;
   transition: background-color 0.3s ease;
-}
-
-.my-page {
-  background-color: #55f411;
-  color: #000000;
-}
-.my-page:hover {
-  background-color: #55f411;
-}
-
-.logout-button {
-  background-color: #ff1a1a;
-  color: #000000;
+  margin-left: auto;
 }
 
 .logout-button:hover {
-  background-color: #ff1a1a;
+  background-color: #e60000;
 }
 
 .reservation-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   margin-bottom: 20px;
+  width: 100%;
+  max-width: 800px;
+  background-color: #f0f0f0;
+  padding: 20px;
+  border-radius: 10px;
 }
 
 .reservation-form .form-group {
   margin-right: 20px;
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 
 .reservation-form label {
   margin-bottom: 5px;
+  font-size: 18px;
+  font-weight: bold;
 }
 
-.reservation-form select {
-  padding: 5px;
-}
-
-.reservation-form span {
-  margin-top: 30px;
-}
-
-.reservation-form button {
-  padding: 10px 20px;
-  margin-top: 20%;
-  background-color: #6a1b9a;
-  color: #fff;
-  border: none;
+.select-box {
+  padding: 10px;
+  font-size: 18px;
   border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  border: 1px solid #ccc;
 }
 
-.reservation-form button:hover {
-  background-color: #4a148c;
+.seat-info {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
 }
 
 .seat-map {
   display: grid;
-  grid-template-columns: repeat(5, 40px);
-  grid-gap: 10px;
-  margin-bottom: 10px;
+  grid-template-columns: repeat(5, 80px);
+  grid-gap: 20px;
+  margin-bottom: 20px;
 }
 
 .seat {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 80px;
+  height: 80px;
 }
 
 .seat input[type="radio"] {
@@ -343,12 +357,16 @@ export default {
 }
 
 .seat label {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   background-color: #ccc;
   border-radius: 5px;
   transition: background-color 0.3s ease;
+  font-size: 14px;
+  text-align: center;
 }
 
 .seat input[type="radio"]:checked + label {
@@ -356,7 +374,7 @@ export default {
 }
 
 .reserved-seat label {
-  background-color: rgb(255, 0, 0) !important;
+  background-color: #f0ad4e !important;
 }
 
 .selected-seat label {
@@ -365,8 +383,30 @@ export default {
 
 .last-row {
   display: grid;
-  grid-template-columns: repeat(4, 40px);
-  grid-gap: 10px;
+  grid-template-columns: repeat(4, 80px);
+  grid-gap: 20px;
   justify-content: center;
+}
+
+.reservation-button-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 20px;
+}
+
+.reserve-button {
+  padding: 20px 40px;
+  font-size: 20px;
+  background-color: #6a1b9a;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.reserve-button:hover {
+  background-color: #4a148c;
 }
 </style>

@@ -12,7 +12,7 @@ admin.initializeApp({
     type: process.env.FIREBASE_TYPE,
     project_id: process.env.FIREBASE_PROJECT_ID,
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),  // 이 줄을 확인하세요
+    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
     client_id: process.env.FIREBASE_CLIENT_ID,
     auth_uri: process.env.FIREBASE_AUTH_URI,
@@ -94,10 +94,12 @@ app.get('/checkAdmin', (req, res) => {
   }
 });
 
+
 // 자리 예약하기
 app.post('/reserve', async (req, res) => {
   const { date, time, seat } = req.body;
   const phoneNumber = req.session.user.phoneNumber;
+  const name = req.session.user.name;
   try {
     const reservationRef = db.collection('reservations').doc(`${date}-${time}-${seat}`);
     const doc = await reservationRef.get();
@@ -118,16 +120,10 @@ app.post('/reserve', async (req, res) => {
     }
 
     const userRef = db.collection('users').doc(phoneNumber);
-    const userDoc = await userRef.get();
-    const userReservations = userDoc.data().reservations || [];
-
-    if (userReservations.length >= 5) {
-      res.status(400).send({ error: '최대 5개의 예약만 가능합니다.' });
-      return;
-    }
 
     await reservationRef.set({
       phoneNumber,
+      name,
       date,
       time,
       seat,
@@ -147,6 +143,26 @@ app.post('/reserve', async (req, res) => {
     res.status(400).send({ error: '예약에 실패했습니다.', details: error.message });
   }
 });
+
+// 특정 시간대의 자리 상태 확인하기
+app.get('/seats', async (req, res) => {
+  const { date, time } = req.query;
+  try {
+    const reservationsSnapshot = await db.collection('reservations')
+      .where('date', '==', date)
+      .where('time', '==', time)
+      .get();
+    const seats = Array(24).fill({ status: 'available', name: '' });
+    reservationsSnapshot.forEach(doc => {
+      const data = doc.data();
+      seats[data.seat] = { status: 'reserved', name: data.name };
+    });
+    res.status(200).send({ seats });
+  } catch (error) {
+    res.status(400).send({ error: '자리 상태를 가져오는 데 실패했습니다.', details: error.message });
+  }
+});
+
 
 // 자리 취소하기
 app.post('/cancelReservation', async (req, res) => {
@@ -176,24 +192,6 @@ app.post('/cancelReservation', async (req, res) => {
   }
 });
 
-// 특정 시간대의 자리 상태 확인하기
-app.get('/seats', async (req, res) => {
-  const { date, time } = req.query;
-  try {
-    const reservationsSnapshot = await db.collection('reservations')
-      .where('date', '==', date)
-      .where('time', '==', time)
-      .get();
-    const seats = Array(24).fill('available');
-    reservationsSnapshot.forEach(doc => {
-      seats[doc.data().seat] = 'reserved';
-    });
-    res.status(200).send({ seats });
-  } catch (error) {
-    res.status(400).send({ error: '자리 상태를 가져오는데 실패했습니다.', details: error.message });
-  }
-});
-
 // 사용자 예약 정보 가져오기
 app.get('/myReservations', async (req, res) => {
   const phoneNumber = req.session.user.phoneNumber;
@@ -212,7 +210,7 @@ app.get('/myReservations', async (req, res) => {
 
 // 회원 탈퇴
 app.post('/deleteAccount', async (req, res) => {
-  const phoneNumber = req.session.user.phoneNumber;
+  const phoneNumber = req.user.phoneNumber;
   try {
     // 회원 정보 삭제
     const userRef = db.collection('users').doc(phoneNumber);
@@ -279,6 +277,53 @@ app.delete('/admin/user', async (req, res) => {
   } catch (error) {
     res.status(400).send({ error: '회원 삭제에 실패했습니다.', details: error.message });
   }
+});
+
+// 관리자 예약 정보 가져오기
+app.get('/admin/reservations', async (req, res) => {
+  const { date } = req.query;
+  try {
+    const reservationsSnapshot = await db.collection('reservations')
+      .where('date', '==', date)
+      .get();
+
+    const reservations = {};
+    reservationsSnapshot.forEach(doc => {
+      const data = doc.data();
+      const time = data.time;
+      if (!reservations[time]) {
+        reservations[time] = [];
+      }
+      reservations[time].push(data);
+    });
+
+    res.status(200).send({ reservations });
+  } catch (error) {
+    res.status(400).send({ error: '예약 정보를 가져오는 데 실패했습니다.', details: error.message });
+  }
+});
+// 관리자 회원 정보 가져오기
+app.get('/admin/members', async (req, res) => {
+  try {
+    const usersSnapshot = await db.collection('users').get();
+    const members = [];
+    usersSnapshot.forEach(doc => {
+      members.push(doc.data());
+    });
+
+    res.status(200).send({ members });
+  } catch (error) {
+    res.status(400).send({ error: '회원 목록을 가져오는 데 실패했습니다.', details: error.message });
+  }
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).send({ error: '로그아웃에 실패했습니다.' });
+    }
+    res.status(200).send({ message: '로그아웃이 완료되었습니다.' });
+  });
 });
 
 app.listen(3000, () => {

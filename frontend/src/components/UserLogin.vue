@@ -22,12 +22,9 @@
               maxlength="11"
               required
               @input="handlePhoneNumberInput"
+              type="tel"
             />
           </div>
-        </div>
-        <div class="form-group checkbox-group">
-          <p class="rememberMe">이름과 전화번호 기억하기</p>
-          <input type="checkbox" id="rememberMe" v-model="rememberMe" />
         </div>
         <button type="submit" class="login-button">로그인</button>
       </form>
@@ -37,7 +34,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 import axios from "axios";
 import { useRouter } from "vue-router";
 
@@ -46,16 +43,7 @@ export default {
   setup() {
     const name = ref("");
     const phoneNumber = ref("");
-    const rememberMe = ref(false);
     const router = useRouter();
-
-    onMounted(() => {
-      if (localStorage.getItem("rememberMe") === "true") {
-        name.value = localStorage.getItem("name");
-        phoneNumber.value = localStorage.getItem("phoneNumber");
-        rememberMe.value = true;
-      }
-    });
 
     const handlePhoneNumberInput = (event) => {
       let formattedPhoneNumber = event.target.value.replace(/\D/g, "");
@@ -69,16 +57,7 @@ export default {
           phoneNumber: phoneNumber.value,
         });
         alert(response.data.message);
-        if (rememberMe.value) {
-          localStorage.setItem("name", name.value);
-          localStorage.setItem("phoneNumber", phoneNumber.value);
-          localStorage.setItem("rememberMe", rememberMe.value);
-        } else {
-          localStorage.removeItem("name");
-          localStorage.removeItem("phoneNumber");
-          localStorage.removeItem("rememberMe");
-        }
-        router.push(response.data.redirect); // 로그인 성공 시 관리자 또는 사용자 페이지로 이동
+        router.push(response.data.redirect);
       } catch (error) {
         console.error("Login error:", error);
         if (
@@ -100,7 +79,6 @@ export default {
     return {
       name,
       phoneNumber,
-      rememberMe,
       login,
       goToRegister,
       handlePhoneNumberInput,
@@ -119,7 +97,7 @@ export default {
   align-items: center;
   justify-content: center;
   height: 100vh;
-  background-color: #f0f0f0; /* 밝은 회색 배경 */
+  background-color: #f0f0f0;
   font-family: "Roboto", sans-serif;
 }
 
@@ -170,12 +148,12 @@ label {
   left: 10px;
   transform: translateY(-50%);
   color: #aaa;
-  pointer-events: none; /* 아이콘 클릭 방지 */
+  pointer-events: none;
 }
 
 input {
   width: 100%;
-  padding: 10px 10px 10px 40px; /* Adjusted padding to avoid overlap with icon */
+  padding: 10px 10px 10px 40px;
   font-size: 14px;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -188,26 +166,10 @@ input::placeholder {
   color: #aaa;
 }
 
-.checkbox-group {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.checkbox-group p {
-  font-size: 14px;
-  color: #333;
-}
-
-.checkbox-group input[type="checkbox"] {
-  margin-left: 10px;
-}
-
 .login-button {
   width: 100%;
   padding: 15px;
-  background-color: #6a1b9a; /* 헬스장 분위기를 위한 강렬한 색상 */
+  background-color: #6a1b9a;
   color: #fff;
   font-size: 16px;
   border: none;

@@ -53,7 +53,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 import axios from "axios";
 
 export default {
@@ -64,12 +64,36 @@ export default {
     const availableDates = ref([]);
     const members = ref([]);
 
+    const fetchReservations = async () => {
+      try {
+        const response = await axios.get(
+          `/api/admin/reservations?date=${selectedDate.value}`
+        );
+        reservations.value = response.data.reservations;
+      } catch (error) {
+        console.error("Fetch reservations error:", error);
+        alert("예약 정보를 가져오는데 실패했습니다.");
+      }
+    };
+
+    const fetchMembers = async () => {
+      try {
+        const response = await axios.get("/api/admin/members");
+        members.value = response.data.members;
+      } catch (error) {
+        console.error("Fetch members error:", error);
+        alert("회원 목록을 가져오는데 실패했습니다.");
+      }
+    };
+
     onMounted(() => {
       generateAvailableDates();
       autoSelectDate();
       fetchMembers();
       fetchReservations();
     });
+
+    watch(selectedDate, fetchReservations);
 
     const generateAvailableDates = () => {
       const daysOfWeek = ["월", "화", "수", "목", "금"];
@@ -111,28 +135,6 @@ export default {
       }
     };
 
-    const fetchReservations = async () => {
-      try {
-        const response = await axios.get(
-          `/api/admin/reservations?date=${selectedDate.value}`
-        );
-        reservations.value = response.data.reservations;
-      } catch (error) {
-        console.error("Fetch reservations error:", error);
-        alert("예약 정보를 가져오는데 실패했습니다.");
-      }
-    };
-
-    const fetchMembers = async () => {
-      try {
-        const response = await axios.get("/api/admin/members");
-        members.value = response.data.members;
-      } catch (error) {
-        console.error("Fetch members error:", error);
-        alert("회원 목록을 가져오는데 실패했습니다.");
-      }
-    };
-
     const deleteUser = async (phoneNumber) => {
       if (!confirm("정말로 이 회원을 삭제하시겠습니까?")) {
         return;
@@ -143,6 +145,7 @@ export default {
         });
         alert("회원이 삭제되었습니다.");
         fetchMembers();
+        fetchReservations();
       } catch (error) {
         console.error("Delete user error:", error);
         alert("회원 삭제에 실패했습니다.");
