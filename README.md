@@ -69,5 +69,3 @@ ItsGymJinHae는 컴퓨터 관련 업계에서 종사하지 않는 관리자를 �
 - **GitHub**: [Jeonghoonchoi74](https://github.com/Jeonghoonchoi74)
 
 ---
-
-디지털 예약 시스템 도입으로 효율적인 회원 관리 및 예약 처리를 경험해보세요!
